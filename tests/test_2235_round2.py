@@ -26,7 +26,7 @@ def _js(name):
 def test_the_entry_row_follows_the_entries_on_a_populated_register():
     js = _js("banking.js")
     populated = js[js.index("} else {", js.index("if (!reg.entries.length) {")) :][
-        :2600
+        :4600
     ]
     # under a date filter too (#663); a class filter puts a line in its place
     assert "</tbody>${quickRow}</table>" in populated
@@ -35,8 +35,8 @@ def test_the_entry_row_follows_the_entries_on_a_populated_register():
     assert "<tbody>${opening}${rows}</tbody>" in populated
     # and the row's memo has a column of its own, in the one header the
     # empty and the populated register share (#729)
-    assert "<table>${head}<tbody>${opening}${rows}</tbody>" in populated
-    head = js[js.index("const head = `<thead>") :][:600]
+    assert '<table class="reg-grid">${head}<tbody>${opening}${rows}</tbody>' in populated
+    head = js[js.index("const head = `<colgroup>") :][:1200]
     assert '<th scope="col">Memo</th>' in head
 
 

@@ -313,11 +313,17 @@ def test_the_register_row_and_the_expense_view_offer_print_check():
     )
     # the register: a check and an expense print, a deposit, a transfer
     # and a card charge do not, a void does not
-    assert got["register"]["61"] == [print_btn.format(id=61), "Void"]
+    # (a register entry, voided or not, can also be deleted outright)
+    delete_btn = (
+        '<button data-destructive data-write class="btn btn-sm btn-secondary" '
+        'title="Delete this entry outright, leaving no void behind" '
+        'onclick="BankingPage.deleteEntry({id}, 5)">Delete</button>'
+    )
+    assert got["register"]["61"] == [print_btn.format(id=61), "Void", delete_btn.format(id=61)]
     assert got["register"]["62"] == [print_btn.format(id=62)]
-    assert got["register"]["63"] == ["Void"]
+    assert got["register"]["63"] == ["Void", delete_btn.format(id=63)]
     assert got["register"]["64"] == ["Void"]
-    assert got["register"]["65"] == []
+    assert got["register"]["65"] == [delete_btn.format(id=65)]
     # the expense's view: Print Check beside Void when it was paid by check
     assert any("transaction_id=62" in b for b in got["expense_check"])
     assert any("ExpensesPage.void(62)" in b for b in got["expense_check"])

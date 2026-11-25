@@ -133,5 +133,6 @@ def test_the_empty_and_populated_registers_have_the_same_columns():
     assert body.count("<thead>") == 1
     assert body.count("${head}") == 2
     head = body[body.index("const head = `") : body.index("</thead>`;")]
-    assert '<th scope="col">Type</th><th scope="col">Category</th>' in head
+    # QuickBooks' 1-line register order: ... Type, Payee, Account, Memo ...
+    assert '<th scope="col">Type</th><th scope="col">Payee</th><th scope="col">Account</th><th scope="col">Memo</th>' in head
     assert head.count("<th ") == 11

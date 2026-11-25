@@ -32,8 +32,10 @@ MEMO_CELLS = """(txn) => [...document.querySelectorAll('tbody tr')]
         || [...tr.querySelectorAll('a')]
             .some(a => a.getAttribute('href') === `/#/journal/${txn}`))
     .map(tr => {
-        const cell = tr.cells[2];
-        const a = cell.querySelector('a');
+        // the Memo column (QuickBooks' 1-line order); the Posting link sits
+        // with the row's buttons
+        const cell = tr.cells[5];
+        const a = cell.querySelector('a') || tr.querySelector('a.rg-posting');
         return {
             text: cell.textContent.trim(),
             link: a ? a.textContent : null,
@@ -54,7 +56,7 @@ def test_the_row_says_posting_and_the_posting_says_where_to_edit(
         _visit(page, handled, f"#/banking/{checking}")
         assert page.evaluate(MEMO_CELLS, txn) == [
             {
-                "text": "November water Posting",
+                "text": "November water",
                 "link": "Posting",
                 "title": TITLE,
                 "href": f"/#/journal/{txn}",

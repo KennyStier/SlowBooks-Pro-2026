@@ -3931,3 +3931,90 @@ tbody tr.row--dim > td.amount { color: var(--text-muted); }
     .bill-with-summary { flex-direction: column; align-items: stretch; }
     .bill-vendor-summary { flex-basis: auto; width: 100%; border-left: 0; border-top: 1px solid var(--border, #ccc); padding: 8px 0 0; }
 }
+
+/* ========================================================================
+ * REGISTER — QuickBooks Desktop's 1-line register: the page's full width,
+ * one row a transaction, the header and the entry row kept in view as the
+ * page scrolls (the page scrolls, not the table, so a save's way back
+ * keeps its place as before).
+ * ======================================================================== */
+#page-content:has(.reg-page) { max-width: none; }
+
+.reg-page { margin-bottom: 6px; }
+.reg-summary {
+    display: flex; flex-wrap: wrap; gap: 6px 28px; align-items: baseline;
+    margin: 0 0 10px; font-size: 12px; color: var(--text-secondary);
+}
+.reg-summary strong { color: var(--text-primary, inherit); }
+.reg-summary-label { text-transform: uppercase; font-size: 10px; letter-spacing: .04em; }
+.reg-summary-value { font-size: 15px; }
+.reg-summary-note { font-size: 11px; color: var(--gray-500); }
+
+.table-container.reg-grid-wrap { overflow: visible; padding-bottom: 0; }
+table.reg-grid { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.reg-grid col.rg-date  { width: 108px; }
+.reg-grid col.rg-num   { width: 58px; }
+.reg-grid col.rg-type  { width: 52px; }
+.reg-grid col.rg-payee { width: 15%; }
+.reg-grid col.rg-acct  { width: 16%; }
+.reg-grid col.rg-memo  { width: auto; }
+.reg-grid col.rg-amt   { width: 100px; }
+.reg-grid col.rg-clr   { width: 34px; }
+.reg-grid col.rg-bal   { width: 110px; }
+.reg-grid col.rg-act   { width: 0; }
+
+.reg-grid th, .reg-grid td {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    padding: 4px 8px; height: 28px; vertical-align: middle;
+    border-bottom: 1px solid var(--panel-border);
+}
+.reg-grid thead th {
+    position: sticky; top: -16px; z-index: 3;   /* #content's own top padding */
+    box-shadow: inset 0 -1px 0 var(--panel-border);
+    font-size: 11px; text-transform: uppercase; letter-spacing: .03em;
+}
+.reg-grid tbody tr:hover td { background: var(--primary-light); }
+.reg-grid tbody tr:focus-within td { background: var(--primary-light); }
+.reg-grid .rg-type-cell { font-size: 10px; letter-spacing: .03em; color: var(--gray-500); }
+.reg-grid .rg-clr-cell { text-align: center; padding-left: 0; padding-right: 0; }
+.reg-grid .rg-bal-cell { font-weight: 700; }
+.reg-grid tr.rg-void td { color: var(--gray-400); text-decoration: line-through; }
+.reg-grid tr.rg-void td.rg-actions { text-decoration: none; }
+
+/* the row's buttons: drawn over the right end of the memo on the row
+   pointed at or holding the focus (Tab still reaches them: they are there,
+   only unseen), so no column is kept empty for them */
+.reg-grid tbody tr { position: relative; }
+.reg-grid td.rg-actions {
+    position: absolute; top: 0; bottom: 0;
+    right: calc(100px + 34px + 100px + 110px);   /* payment, ✓, deposit, balance */
+    display: flex; align-items: center; gap: 3px;
+    width: auto; height: auto; padding: 0 6px; border: 0; overflow: visible;
+    background: transparent;
+}
+.reg-grid td.rg-actions > * { opacity: 0; }
+.reg-grid tbody tr:hover td.rg-actions,
+.reg-grid tbody tr:focus-within td.rg-actions { background: var(--primary-light); }
+.reg-grid tbody tr:hover td.rg-actions > *,
+.reg-grid tbody tr:focus-within td.rg-actions > * { opacity: 1; }
+.reg-grid td.rg-actions:empty { display: none; }
+.reg-grid td.rg-actions .btn { padding: 1px 7px; font-size: 11px; margin: 0; }
+.reg-grid td.rg-actions .rg-posting { font-size: 11px; margin-right: 4px; }
+.reg-grid thead th:last-child { padding: 0; border: 0; }
+
+/* the entry row: the same columns, kept at the foot of the window */
+.reg-grid tfoot td {
+    position: sticky; bottom: -16px; z-index: 2;
+    background: var(--primary-light);
+    border-top: 2px solid var(--primary, #2c5aa0);
+    padding: 3px 4px; overflow: visible;
+}
+.reg-grid tfoot tr + tr td { position: static; border: 0; height: 0; padding: 0; }
+.reg-grid tfoot input, .reg-grid tfoot select, .reg-grid tfoot .cbx-input {
+    width: 100%; font-size: 12px; padding: 3px 5px; box-sizing: border-box;
+}
+.reg-grid tfoot .amount input { text-align: right; }
+.reg-grid tfoot .aqa-wrap { width: 100%; }
+.reg-grid tfoot .qe-class-box, .reg-grid tfoot .cbx--qe-class-box { margin-top: 2px; }
+.reg-grid tfoot td.rg-post { text-align: right; }
+.reg-grid tfoot td.rg-post .btn { padding: 3px 14px; }

@@ -57,7 +57,7 @@ def _page(browser):
 
 
 CELLS = """() => [...document.querySelectorAll('#page-content tr[data-txn]')].map(r => {
-    const c = r.cells[9], b = c.querySelector('button');  // ✓, after Category (#729)
+    const c = r.cells[7], b = c.querySelector('button');  // ✓, between Payment and Deposit (QuickBooks' order)
     const shown = !!b && b.offsetParent !== null;
     return { txn: +r.dataset.txn, text: c.textContent.trim(),
              button: shown ? b.getAttribute('aria-label') : null,

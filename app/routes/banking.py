@@ -59,6 +59,7 @@ from app.services.bank_posting import (
     reconciled_on,
     replace_bank_entry,
     require_bank_account,
+    release_statement_links,
     void_document,
 )
 from app.services.bank_register import (
@@ -1273,6 +1274,91 @@ def void_bank_entry(txn_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(txn)
     return _entry_out(txn, bank_line.account_id, db, status="void")
+
+
+@router.get("/payee-last")
+def payee_last_entry(payee: str, account_id: int, db: Session = Depends(get_db)):
+    """QuickFill, as QuickBooks Desktop has it: the category, class and
+    amount of the last register entry made out to this payee (capitals and
+    edge spaces aside), for the entry row to fill in once a payee is typed.
+    A void entry, a split one and a transfer are passed over, as is one whose
+    category is the register's own account. {} when there is none."""
+    name = (payee or "").strip().lower()
+    if not name:
+        return {}
+    candidates = (
+        db.query(Transaction)
+        .filter(
+            Transaction.source_type == "bank_entry",
+            func.lower(func.trim(Transaction.description)) == name,
+        )
+        .order_by(Transaction.date.desc(), Transaction.id.desc())
+        .limit(25)
+        .all()
+    )
+    voided = voided_transaction_ids(db, [t.id for t in candidates])
+    for txn in candidates:
+        if txn.id in voided or len(txn.lines) != 2:
+            continue
+        bank = next((ln for ln in txn.lines if ln.account and ln.account.bank_kind), None)
+        if bank is None:
+            continue
+        other = next(ln for ln in txn.lines if ln is not bank)
+        if other.account_id == account_id or (other.account and other.account.bank_kind):
+            continue
+        amount = (bank.debit or Decimal("0")) - (bank.credit or Decimal("0"))
+        return {
+            "transaction_id": txn.id,
+            "category_account_id": other.account_id,
+            "class_id": txn.class_id,
+            "amount": str(amount),
+        }
+    return {}
+
+
+@router.delete("/entries/{txn_id}")
+def delete_bank_entry(txn_id: int, db: Session = Depends(get_db)):
+    """Delete a register entry outright, as QuickBooks Desktop allows: a
+    mistake leaves no void behind. Only an entry typed in the register or
+    added from the bank feed (source_type bank_entry), and only while a void
+    would be allowed too: not in a completed reconciliation, not dated on or
+    before the closing date. A voided entry goes with its reversal. A feed
+    line it was added from goes back to the review queue. The audit trail
+    keeps the deleted rows (the hook logs each DELETE)."""
+    from app.models.attachments import Attachment
+
+    txn = _bank_entry(db, txn_id)
+    reversals = (
+        db.query(Transaction)
+        .filter(
+            Transaction.source_type == "bank_entry_void",
+            Transaction.source_id == txn.id,
+        )
+        .all()
+    )
+    for t in [txn, *reversals]:
+        if any(ln.reconciliation_id for ln in t.lines):
+            raise HTTPException(
+                status_code=400,
+                detail="This entry is in a completed reconciliation and cannot be deleted",
+            )
+        check_closing_date(db, t.date)
+    if (
+        db.query(Attachment)
+        .filter(Attachment.entity_type == "bank_entry", Attachment.entity_id == txn.id)
+        .first()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="This entry has an attached file; remove the attachment first",
+        )
+    gone = [r.id for r in reversals]
+    for t in [*reversals, txn]:
+        release_statement_links(db, t)
+        db.flush()
+        db.delete(t)
+    db.commit()
+    return {"deleted": txn_id, "reversals_deleted": gone}
 
 
 # ---------------------------------------------------------------------------

@@ -1218,7 +1218,7 @@ const BankingPage = {
         BankingPage._ctx = { accountId: id, accountName: reg.account_name, feedId: feed ? feed.bank_account_id : null, kind, lastReconciled: info.last_reconciled || null, className: reg.class_name || '', classId: chosen && !chosen.is_archived ? chosen.id : null };
 
         let html = `
-            <div class="page-header">
+            <div class="page-header reg-page">
                 <h2>${escapeHtml(reg.account_name)} <span style="font-size:11px; color:var(--gray-400);">${accountLabel(reg, '', '') ? accountLabel(reg, '', '') + ' · ' : ''}${BankingPage._kindLabel(kind)}</span></h2>
                 <div class="btn-group">
                     <button class="btn btn-secondary" onclick="BankingPage.go('#/banking')">Back</button>
@@ -1230,13 +1230,10 @@ const BankingPage = {
                     <button class="btn btn-secondary" onclick="BankingPage.showReconciliations(${id})">Reconciliations…</button>
                 </div>
             </div>
-            <div class="card-grid" style="margin-bottom:16px;">
-                <div class="card"><div class="card-header">${kind === 'credit_card' ? 'Amount owed' : 'Balance'}</div>
-                    <div class="card-value">${formatCurrency(reg.balance)}</div></div>
-                <div class="card"><div class="card-header">To review</div>
-                    <div class="card-value">${review.length}</div>
-                    <div style="font-size:11px; color:var(--gray-500);">${feed ? 'statement lines not yet in the books' : 'no bank feed on this account'}</div></div>
-                ${info.last_reconciled ? `<div class="card"><div class="card-header">Last reconciled</div><div class="card-value" style="font-size:16px;">${formatDate(info.last_reconciled)}</div></div>` : ''}
+            <div class="reg-summary">
+                <span><span class="reg-summary-label">${kind === 'credit_card' ? 'Amount owed' : 'Balance'}</span> <strong class="reg-summary-value">${formatCurrency(reg.balance)}</strong></span>
+                <span title="${feed ? 'statement lines not yet in the books' : 'no bank feed on this account'}"><span class="reg-summary-label">To review</span> <strong>${review.length}</strong>${feed ? '' : ' <span class="reg-summary-note">(no bank feed)</span>'}</span>
+                ${info.last_reconciled ? `<span><span class="reg-summary-label">Last reconciled</span> <strong>${formatDate(info.last_reconciled)}</strong></span>` : ''}
             </div>`;
 
         if (review.length) html += BankingPage._reviewPanel(review, feed.bank_account_id, id, kind);
@@ -1296,35 +1293,43 @@ const BankingPage = {
             : BankingPage._quickEntryRow(id, kind, chart, outLabel, inLabel);
         // one set of columns, empty or not (#729): the empty register's
         // header said Category where the populated one said Type
-        const head = `<thead><tr>
-                    <th scope="col">Date</th><th scope="col">Payee</th><th scope="col">Memo</th><th scope="col">Ref #</th><th scope="col">Type</th><th scope="col">Category</th>
-                    <th scope="col" class="amount">${outLabel}</th><th scope="col" class="amount">${inLabel}</th><th scope="col" class="amount">Balance</th>
-                    <th scope="col" title="✓ cleared · R reconciled">✓</th><th scope="col"></th>
+        const head = `<colgroup><col class="rg-date"><col class="rg-num"><col class="rg-type"><col class="rg-payee"><col class="rg-acct"><col class="rg-memo"><col class="rg-amt"><col class="rg-clr"><col class="rg-amt"><col class="rg-bal"><col class="rg-act"></colgroup>
+                <thead><tr>
+                    <th scope="col">Date</th><th scope="col">Num</th><th scope="col">Type</th><th scope="col">Payee</th><th scope="col">Account</th><th scope="col">Memo</th>
+                    <th scope="col" class="amount">${outLabel}</th><th scope="col" class="rg-clr-cell" title="✓ cleared · R reconciled">✓</th><th scope="col" class="amount">${inLabel}</th><th scope="col" class="amount">Balance</th>
+                    <th scope="col"><span class="visually-hidden">Actions</span></th>
                 </tr></thead>`;
         if (!reg.entries.length) {
             html += `<div class="empty-state"><p>${filtered ? 'Nothing posted to this account for these filters' : 'Nothing posted to this account yet'}</p></div>`;
-            html += `<div class="table-container"><table>${head}<tbody></tbody>${quickRow}</table></div>`;
+            html += `<div class="table-container reg-grid-wrap"><table class="reg-grid">${head}<tbody></tbody>${quickRow}</table></div>`;
         } else {
-            const rows = shown.map(e => `
-                <tr data-txn="${e.transaction_id}" style="${e.voided ? 'color:var(--gray-400); text-decoration:line-through;' : ''}">
+            // QuickBooks Desktop's 1-line register: one row a transaction,
+            // nothing wraps (a long name or memo ends in … with the whole of
+            // it on hover), the row's buttons shown on the row pointed at or
+            // focused, a double-click opens it for editing
+            const rows = shown.map(e => {
+                const edit = BankingPage._editAction(e, id);
+                return `
+                <tr data-txn="${e.transaction_id}" class="${e.voided ? 'rg-void' : ''}"${edit ? ` ondblclick="if (!event.target.closest('button, a, input, select')) ${edit}"` : ''}>
                     <td>${formatDate(e.date)}</td>
-                    <td>${escapeHtml(e.payee || '')}</td>
-                    <td>${BankingPage._memoCell(e)}</td>
                     <td>${escapeHtml(e.reference || '')}</td>
-                    <td style="font-size:10px; color:var(--gray-500);">${escapeHtml(sourceWord(e.source_type, e.source_kind))}</td>
+                    ${BankingPage._typeCell(e)}
+                    <td title="${escapeHtml(e.payee || '')}">${escapeHtml(e.payee || '')}</td>
                     ${BankingPage._categoryCell(e)}
+                    <td>${BankingPage._memoCell(e)}</td>
                     <td class="amount">${e.payment > 0 ? formatCurrency(e.payment) : ''}</td>
+                    <td class="rg-clr-cell">${BankingPage._clearedCell(e, id)}</td>
                     <td class="amount">${e.deposit > 0 ? formatCurrency(e.deposit) : ''}</td>
-                    <td class="amount" style="font-weight:700;">${formatCurrency(e.balance)}</td>
-                    <td style="text-align:center;">${BankingPage._clearedCell(e, id)}</td>
-                    <td style="white-space:nowrap;">${BankingPage._printCheckButton(e)}${BankingPage._editButton(e, id)}${e.voidable ? `<button data-destructive class="btn btn-sm btn-secondary" onclick="BankingPage.voidEntry('${e.source_type}', ${e.transaction_id}, ${id})">Void</button>` : ''}</td>
-                </tr>`).join('');
+                    <td class="amount rg-bal-cell">${formatCurrency(e.balance)}</td>
+                    <td class="rg-actions">${e.source_type === 'bank_entry' && e.editable ? `<a class="rg-posting" href="${escapeHtml(BankingPage._entryHref(e))}" onclick="return App.openOver(event, this.getAttribute('href'))" title="The journal posting behind this bank entry; use Edit to change it">Posting</a>` : ''}${BankingPage._printCheckButton(e)}${BankingPage._editButton(e, id)}${e.voidable ? `<button data-destructive class="btn btn-sm btn-secondary" onclick="BankingPage.voidEntry('${e.source_type}', ${e.transaction_id}, ${id})">Void</button>` : ''}${e.source_type === 'bank_entry' && e.reconciliation_id == null ? ` <button data-destructive data-write class="btn btn-sm btn-secondary" title="Delete this entry outright, leaving no void behind" onclick="BankingPage.deleteEntry(${e.transaction_id}, ${id})">Delete</button>` : ''}</td>
+                </tr>`;
+            }).join('');
             // oldest first, so the balance brought forward (a start date's
             // doing) opens the table (2.23.5 round 2, NEW-142); the entry
             // row follows the entries on a populated register as on an
             // empty one (W-14, NEW-140)
-            const opening = f.start_date ? `<tr style="color:var(--gray-500);" id="reg-opening"><td>${formatDate(f.start_date)}</td><td colspan="7">Balance brought forward${reg.class_name ? ` (${escapeHtml(reg.class_name)})` : ''}</td><td class="amount">${formatCurrency(reg.opening_balance)}</td><td></td><td></td></tr>` : '';
-            html += `<div class="table-container"><table>${head}<tbody>${opening}${rows}</tbody>${quickRow}</table></div>${hiddenNote}`;
+            const opening = f.start_date ? `<tr style="color:var(--gray-500);" id="reg-opening"><td>${formatDate(f.start_date)}</td><td colspan="8">Balance brought forward${reg.class_name ? ` (${escapeHtml(reg.class_name)})` : ''}</td><td class="amount">${formatCurrency(reg.opening_balance)}</td><td></td></tr>` : '';
+            html += `<div class="table-container reg-grid-wrap"><table class="reg-grid">${head}<tbody>${opening}${rows}</tbody>${quickRow}</table></div>${hiddenNote}`;
         }
         return html;
     },
@@ -1402,11 +1407,38 @@ const BankingPage = {
         const lines = Array.isArray(e.category_lines) ? e.category_lines : [];
         const words = l => accountWords({ account_number: l.account_number }, l.account_name || '');
         if (lines.length === 1) {
-            return `<td style="font-size:11px;">${escapeHtml(words(lines[0]))}</td>`;
+            return `<td title="${escapeHtml(words(lines[0]))}">${escapeHtml(words(lines[0]))}</td>`;
         }
-        if (!lines.length) return `<td style="font-size:11px;">${escapeHtml(e.category || '')}</td>`;
+        if (!lines.length) return `<td title="${escapeHtml(e.category || '')}">${escapeHtml(e.category || '')}</td>`;
         const each = lines.map(l => `${words(l)} ${formatCurrency(l.amount)}`);
-        return `<td style="font-size:11px;" title="${escapeHtml(each.join('\n'))}">${lines.length} accounts<span class="visually-hidden">: ${escapeHtml(each.join('; '))}</span></td>`;
+        return `<td title="${escapeHtml(each.join('\n'))}">${lines.length} accounts<span class="visually-hidden">: ${escapeHtml(each.join('; '))}</span></td>`;
+    },
+
+    // QuickBooks' register Type column, its short codes: CHK a check (money
+    // out with a number), DEP money in, PMT money out with none, and so on;
+    // the whole word on hover.
+    _typeCell(e) {
+        const word = sourceWord(e.source_type, e.source_kind);
+        const t = String(e.source_type || '');
+        const codes = {
+            expense: 'EXP', deposit: 'DEP', transfer: 'TRANSFR', cc_charge: 'CC', payment: 'PMT',
+            bill_payment: 'BILLPMT', sales_receipt: 'RCPT', journal: 'GENJRNL', manual: 'GENJRNL',
+            manual_journal: 'GENJRNL', opening_balance: 'OPEN', payroll: 'PAYCHK',
+        };
+        let code;
+        if (e.source_kind) code = word;
+        else if (t.endsWith('_void')) code = 'VOID';
+        else if (t === 'bank_entry') code = e.deposit > 0 ? 'DEP' : (e.reference ? 'CHK' : 'PMT');
+        else code = codes[t] || word;
+        return `<td class="rg-type-cell" title="${escapeHtml(word)}">${escapeHtml(code)}</td>`;
+    },
+
+    // What Edit (and a double-click on the row) runs, or '' for none.
+    _editAction(e, accountId) {
+        if (!e.editable) return '';
+        if (e.source_type === 'manual') return `JournalPage.editEntry(${e.transaction_id})`;
+        if (e.source_type === 'deposit') return `DepositsPage.editDeposit(${e.transaction_id})`;
+        return `BankingPage.editEntry(${e.transaction_id}, ${accountId})`;
     },
 
     _memoCell(e) {
@@ -1414,7 +1446,7 @@ const BankingPage = {
         if (e.source_type !== 'bank_entry' || !e.editable) {
             return `<a href="${href}" onclick="return App.openOver(event, this.getAttribute('href'))">${escapeHtml(e.description || 'View entry')}</a>`;
         }
-        return `${e.description ? `${escapeHtml(e.description)} ` : ''}<a href="${href}" onclick="return App.openOver(event, this.getAttribute('href'))" style="font-size:10px;" title="The journal posting behind this bank entry; use Edit to change it">Posting</a>`;
+        return `<span title="${escapeHtml(e.description || '')}">${e.description ? escapeHtml(e.description) : ''}</span>`;
     },
 
     // A register entry opens for editing (#388); the register says which
@@ -1447,7 +1479,7 @@ const BankingPage = {
                 <td>${formatDate(t.date)}</td>
                 <td>${escapeHtml(t.payee || '')}<div style="font-size:10px; color:var(--gray-400);">${escapeHtml(t.description || '')}</div></td>
                 <td class="amount" style="${t.amount >= 0 ? 'color:var(--text-success)' : 'color:var(--text-danger)'}">${formatCurrency(t.amount)}</td>
-                <td>${AccountQuickAdd.picker(`<select id="cat-${t.id}" class="review-cat" data-write data-current="${t.category_account_id || ''}" aria-label="Category" onchange="BankingPage.setCategory(${t.id}, this)"><option value="">${t.category_name ? escapeHtml(t.category_name) : 'Pick a category…'}</option></select>`, 'review', { ctx: accountId })}</td>
+                <td>${AccountQuickAdd.picker(`<select id="cat-${t.id}" class="review-cat" data-write data-search data-current="${t.category_account_id || ''}" aria-label="Category" onchange="BankingPage.setCategory(${t.id}, this)"><option value="">${t.category_name ? escapeHtml(t.category_name) : 'Pick a category…'}</option></select>`, 'review', { ctx: accountId })}</td>
                 ${BankingPage._reviewDimCells(t)}
                 <td style="white-space:nowrap;" data-write><div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;" data-write>
                     <button class="btn btn-sm btn-primary" onclick="BankingPage.addLine(${t.id}, ${accountId})">Add</button>
@@ -1849,6 +1881,18 @@ const BankingPage = {
         } catch (err) { toast(err.message, 'error'); }
     },
 
+    // Delete outright (a mistake typed in), as QuickBooks Desktop allows: no
+    // void is left in the register. A voided entry goes with its reversal,
+    // and a bank-feed line it came from returns to the review queue.
+    async deleteEntry(txnId, accountId) {
+        if (!confirm('Delete this entry? It is removed from the register entirely (no void is kept). A bank-feed line it was added from goes back to review.')) return;
+        try {
+            await API.del(`/banking/entries/${txnId}`);
+            toast('Deleted');
+            BankingPage._backToRegister(accountId);
+        } catch (err) { toast(err.message, 'error'); }
+    },
+
     async voidEntry(sourceType, txnId, accountId) {
         if (!confirm('Void this entry? A reversing entry is posted; the original stays in the ledger.')) return;
         const path = sourceType === 'transfer' ? `/transfers/${txnId}/void`
@@ -1872,17 +1916,18 @@ const BankingPage = {
         const carried = BankingPage._lastDate[accountId] || '';
         // the row lives in its own <tfoot>, after the entries; every field is
         // named for the new entry, apart from the page's other fields
-        return `<tfoot><tr id="reg-quick-entry" data-write style="background:var(--primary-light);">
-                    <td><input type="date" id="qe-date" aria-label="New entry date" value="${carried || today}" data-carried="${carried}" style="width:120px; font-size:11px; padding:2px 4px;" ${key}></td>
-                    <td><input type="text" id="qe-payee" list="qe-payee-vendors" autocomplete="off" aria-label="New entry payee" placeholder="Payee" style="width:100%; font-size:11px; padding:2px 4px;" onblur="BankingPage.payeeTyped(this.value, BankingPage._rowMoneyIn(), 'qe-payee')" ${key}>${BankingPage._vendorDatalist('qe-payee-vendors')}</td>
-                    <td><input type="text" id="qe-memo" aria-label="New entry memo" placeholder="Memo" style="width:100%; font-size:11px; padding:2px 4px;" ${key}></td>
-                    <td><input type="text" id="qe-ref" aria-label="New entry check or reference number" placeholder="Ref" style="width:60px; font-size:11px; padding:2px 4px;" ${key}></td>
+        return `<tfoot><tr id="reg-quick-entry" data-write ${key}>
+                    <td><input type="date" id="qe-date" aria-label="New entry date" value="${carried || today}" data-carried="${carried}"></td>
+                    <td><input type="text" id="qe-ref" aria-label="New entry check or reference number" placeholder="Num"></td>
                     <td></td>
-                    <td>${AccountQuickAdd.picker('<select id="qe-category" aria-label="New entry category" data-no-search ' + key + ' style="font-size:11px; padding:2px 4px; max-width:150px;"><option value="">Category…</option>' + cats + '</select>', 'register', { ctx: accountId, id: 'qe-category-add', style: 'font-size:11px; padding:2px 6px;' })}${BankingPage._quickClassHtml(key)}</td>
-                    <td class="amount"><input type="number" step="0.01" min="0" id="qe-out" class="money" aria-label="New entry ${escapeHtml(outLabel)}" placeholder="0.00" style="width:90px; font-size:11px; padding:2px 4px; text-align:right;" ${key}></td>
-                    <td class="amount"><input type="number" step="0.01" min="0" id="qe-in" class="money" aria-label="New entry ${escapeHtml(inLabel)}" placeholder="0.00" style="width:90px; font-size:11px; padding:2px 4px; text-align:right;" ${key}></td>
-                    <td></td><td></td>
-                    <td><button type="button" class="btn btn-sm btn-primary" onclick="BankingPage.postQuickEntry(${accountId})">Post</button></td>
+                    <td><input type="text" id="qe-payee" list="qe-payee-vendors" autocomplete="off" aria-label="New entry payee" placeholder="Payee" oninput="BankingPage.payeeComplete(this, event)" onblur="BankingPage.quickFill(${accountId}, this.value); BankingPage.payeeTyped(this.value, BankingPage._rowMoneyIn(), 'qe-payee')">${BankingPage._vendorDatalist('qe-payee-vendors')}</td>
+                    <td>${AccountQuickAdd.picker('<select id="qe-category" aria-label="New entry account" data-search><option value="">Account</option>' + cats + '</select>', 'register', { ctx: accountId, id: 'qe-category-add', label: '+', style: 'padding:0 6px;', skipTab: true })}${BankingPage._quickClassHtml(key)}</td>
+                    <td><input type="text" id="qe-memo" aria-label="New entry memo" placeholder="Memo"></td>
+                    <td class="amount"><input type="number" step="0.01" min="0" id="qe-out" class="money" aria-label="New entry ${escapeHtml(outLabel)}" placeholder="0.00"></td>
+                    <td></td>
+                    <td class="amount"><input type="number" step="0.01" min="0" id="qe-in" class="money" aria-label="New entry ${escapeHtml(inLabel)}" placeholder="0.00"></td>
+                    <td class="rg-post"><button type="button" class="btn btn-sm btn-primary" onclick="BankingPage.postQuickEntry(${accountId})">Record</button></td>
+                    <td></td>
                 </tr>
                 <tr data-write><td colspan="11" id="qe-category-host" style="padding:0; border:0;"></td></tr></tfoot>`;
     },
@@ -1896,7 +1941,7 @@ const BankingPage = {
         const blank = ClassWarn.enabled();
         const opts = (blank ? `<option value="" selected>— choose a ${T('class').toLowerCase()} —</option>` : '<option value="">—</option>')
             + classes.map(c => `<option value="${c.id}"${!blank && c.is_system_default ? ' selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
-        return `<select id="qe-class" aria-label="New entry ${T('class').toLowerCase()}" data-no-search ${key} style="display:block; margin-top:2px; font-size:11px; padding:2px 4px; max-width:150px;">${opts}</select>`;
+        return `<select id="qe-class" aria-label="New entry ${T('class').toLowerCase()}" data-search class="qe-class-box">${opts}</select>`;
     },
 
     // In the entry row's place while a class is chosen (#663). The
@@ -1918,6 +1963,8 @@ const BankingPage = {
     // posts, the rule every form follows. Enter on a button is its own.
     _quickKey(event, accountId) {
         if (event.key !== 'Enter' || event.defaultPrevented) return;
+        // the handler is the row's: a button (Post, Add) keeps its own Enter
+        if (event.target.tagName === 'BUTTON') return;
         // the category list never posted on Enter; it only moves through
         if (!DataEntryPrefs.enter_moves && event.target.tagName === 'SELECT') return;
         const row = document.getElementById('reg-quick-entry');
@@ -2072,7 +2119,7 @@ const BankingPage = {
                         <input name="amount" class="money" type="number" step="0.01" required>
                         <div style="font-size:10px; color:var(--gray-500);">${isCard ? 'Negative = a charge (owe more). Positive = a payment to the card.' : 'Negative = money out (a payment). Positive = money in (a deposit).'}</div></div>
                     <div class="form-group"><label>Payee</label>
-                        <input name="payee" id="entry-payee" list="entry-payee-vendors" autocomplete="off" onblur="BankingPage.payeeTyped(this.value, BankingPage._formMoneyIn(), 'entry-payee')">
+                        <input name="payee" id="entry-payee" list="entry-payee-vendors" autocomplete="off" oninput="BankingPage.payeeComplete(this, event)" onblur="BankingPage.payeeTyped(this.value, BankingPage._formMoneyIn(), 'entry-payee')">
                         ${BankingPage._vendorDatalist('entry-payee-vendors')}</div>
                     <div class="form-group"><label>Check / ref #</label>
                         <input name="check_number"></div>
@@ -2408,7 +2455,7 @@ const BankingPage = {
         if (!body) return;
         const n = body.querySelectorAll('tr').length + 1;
         body.insertAdjacentHTML('beforeend', `<tr>
-            <td><select class="split-cat" aria-label="Split line ${n} account" data-no-search><option value="">Select…</option>${BankingPage._splitCats || ''}</select></td>
+            <td><select class="split-cat" aria-label="Split line ${n} account" data-search><option value="">Select…</option>${BankingPage._splitCats || ''}</select></td>
             <td class="amount"><input class="split-amt money" type="number" step="0.01" aria-label="Split line ${n} amount" oninput="BankingPage.splitNote()" style="text-align:right;"></td>
             <td style="text-align:center;"><input class="split-fee" type="checkbox" style="width:auto;" aria-label="Split line ${n} taken out" title="A fee the processor kept, or a refund netted against a check: this line goes the other way from the entry" onchange="BankingPage.splitNote()"></td>
             ${BankingPage.nameCellHtml('split-name', null, `${T('Customer')}, line ${n}`)}${Nonprofit.classCellHtml('split', null)}
@@ -2628,6 +2675,56 @@ const BankingPage = {
     // The payee box's suggestions: a native datalist of the vendors, so a
     // pick fills the box with the vendor's name exactly. The names in it
     // are the ones the entry links to when it posts.
+    // The payee completes as it is typed, as QuickBooks' QuickFill does:
+    // "ho" shows "Home Depot" with "me Depot" selected, so Tab keeps the
+    // whole name and typing on replaces the rest. Deleting never completes.
+    payeeComplete(input, event) {
+        if (!event || !/^insert/.test(event.inputType || '') || event.isComposing) return;
+        const typed = input.value;
+        if (!typed.trim() || input.selectionStart !== typed.length) return;
+        const lower = typed.toLowerCase();
+        const names = [...(BankingPage._vendorsByName || new Map()).values()].map(v => v.name)
+            .filter(n => n && n.toLowerCase().startsWith(lower))
+            .sort((a, b) => a.length - b.length || a.localeCompare(b));
+        if (!names.length || names[0].length === typed.length) return;
+        input.value = names[0];  // the vendor's own capitals, as QuickBooks writes it
+        input.setSelectionRange(typed.length, input.value.length);
+    },
+
+    // QuickFill (QuickBooks Desktop's): leaving the payee fills the row's
+    // category, class and amount from that payee's last entry. Only a row
+    // still blank there is filled, so nothing typed is ever overwritten, and
+    // an answer that comes back after the category was started is dropped.
+    async quickFill(accountId, payee) {
+        const name = (payee || '').trim();
+        const cat = document.getElementById('qe-category');
+        const out = document.getElementById('qe-out');
+        const inn = document.getElementById('qe-in');
+        if (!name || !cat || !out || !inn) return;
+        const blank = () => !cat.value && !(cat._cbx && cat._cbx.editing) && !out.value && !inn.value;
+        if (!blank()) return;
+        let last;
+        try {
+            last = await API.get(`/banking/payee-last?account_id=${accountId}&payee=${encodeURIComponent(name)}`);
+        } catch (err) { return; }  // a fill that fails leaves the row as typed
+        if (!last || !last.category_account_id || !blank()) return;
+        if (document.getElementById('qe-payee').value.trim() !== name) return;
+        if (!cat.querySelector(`option[value="${last.category_account_id}"]`)) return;
+        cat.value = String(last.category_account_id);
+        cat.dispatchEvent(new Event('change', { bubbles: true }));
+        const cls = document.getElementById('qe-class');
+        if (cls && last.class_id && cls.querySelector(`option[value="${last.class_id}"]`)) {
+            cls.value = String(last.class_id);
+            cls.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        const amt = parseFloat(last.amount);
+        if (amt) {
+            const box = amt < 0 ? out : inn;
+            box.value = Math.abs(amt).toFixed(2);
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    },
+
     _vendorDatalist(id) {
         const opts = [...(BankingPage._vendorsByName || new Map()).values()]
             .map(v => `<option value="${escapeHtml(v.name)}"></option>`).join('');

@@ -58,11 +58,13 @@ const AccountQuickAdd = {
     },
 
     // The Add button for a profile, or nothing for a sign-in that can't add.
-    button(profile, { ctx = null, id = '', label = 'Add', style = '', disabled = false } = {}) {
+    // skipTab: out of the Tab walk (the register row, where Tab goes from
+    // the category straight on to the amount); a click still opens it.
+    button(profile, { ctx = null, id = '', label = 'Add', style = '', disabled = false, skipTab = false } = {}) {
         if (!AccountQuickAdd.canAdd()) return '';
         const arg = ctx === null || ctx === undefined ? '' : `, ${JSON.stringify(ctx)}`;
         return `<button type="button"${id ? ` id="${id}"` : ''} class="btn btn-sm btn-secondary aqa-add" data-write`
-            + ` aria-label="Add a new account" title="Add a new account"${style ? ` style="${style}"` : ''}${disabled ? ' disabled' : ''}`
+            + ` aria-label="Add a new account" title="Add a new account"${skipTab ? ' tabindex="-1"' : ''}${style ? ` style="${style}"` : ''}${disabled ? ' disabled' : ''}`
             + ` onclick="AccountQuickAdd.open(this, '${profile}'${escapeHtml(arg)})">${escapeHtml(label)}</button>`;
     },
 

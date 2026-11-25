@@ -484,7 +484,7 @@ def _post_row(page, payee):
     page.fill("#qe-payee", payee)
     page.select_option("#qe-category", "2")
     page.fill("#qe-out", "25")
-    page.click("#reg-quick-entry button:has-text('Post')")
+    page.click("#reg-quick-entry button:has-text('Record')")
     page.wait_for_selector("#toast-container .toast:has-text('Entry posted')")
     page.wait_for_function("() => document.getElementById('qe-out').value === ''")
 
@@ -514,13 +514,99 @@ def test_the_payee_box_suggests_vendors_and_links_the_one_named(browser):
         )
         # a name that is not a vendor stays text, and the offer is made
         page.evaluate("() => { window.__payeeToastMs = 300; }")
-        _post_row(page, "Pine Street")
-        assert posted[-1]["vendor_id"] is None and posted[-1]["payee"] == "Pine Street"
+        _post_row(page, "Oak Street")
+        assert posted[-1]["vendor_id"] is None and posted[-1]["payee"] == "Oak Street"
         assert (
             page.locator(
-                "#toast-container .toast:has-text('Add \"Pine Street\"')"
+                "#toast-container .toast:has-text('Add \"Oak Street\"')"
             ).count()
             == 1
         )
+    finally:
+        page.close()
+
+
+def test_the_row_is_typed_through_as_quickbooks_has_it(browser):
+    """ "pi" completes the payee, "re" finds the category, Tab goes on to the
+    amount, and Enter posts: the row never needs the mouse."""
+    posted = []
+    page = _vendor_register(
+        browser,
+        posted,
+        [{"id": 7, "name": "Pine Street Lumber"}, {"id": 8, "name": "Acme Supply"}],
+    )
+    try:
+        page.focus("#qe-payee")
+        page.keyboard.type("pi")
+        assert page.input_value("#qe-payee") == "Pine Street Lumber"
+        assert page.evaluate(
+            "() => { const b = document.getElementById('qe-payee');"
+            " return [b.selectionStart, b.selectionEnd]; }"
+        ) == [2, len("Pine Street Lumber")]
+        # Backspace takes the completion back, and never completes again
+        page.keyboard.press("Backspace")
+        assert page.input_value("#qe-payee") == "Pi"
+        page.keyboard.type("n")
+        assert page.input_value("#qe-payee") == "Pine Street Lumber"
+
+        page.focus("#qe-category-box")
+        names = page.evaluate(
+            "() => [...document.querySelectorAll('#qe-category option')]"
+            ".filter(o => o.value).map(o => o.textContent.trim())"
+        )
+        want = names[0]
+        page.keyboard.type(want[:2])
+        page.keyboard.press("Tab")
+        assert page.evaluate(
+            "() => document.getElementById('qe-category').selectedOptions[0].textContent.trim()"
+        ) == want
+        # the Add button is out of the walk: Tab lands on the memo, then the
+        # amount (QuickBooks' 1-line order)
+        assert page.evaluate("() => document.activeElement.id") == "qe-memo"
+        page.keyboard.press("Tab")
+        assert page.evaluate("() => document.activeElement.id") == "qe-out"
+        page.keyboard.type("25")
+        page.keyboard.press("Enter")
+        page.wait_for_selector("#toast-container .toast:has-text('Entry posted')")
+        assert posted[-1]["vendor_id"] == 7 and posted[-1]["amount"] == "-25.00"
+    finally:
+        page.close()
+
+
+def test_quickfill_fills_a_blank_row_from_the_payees_last_entry(browser):
+    """Leaving the payee fills the category and amount from the payee's last
+    entry (QuickBooks' QuickFill); a row already typed into is left alone."""
+    posted = []
+    page = _vendor_register(
+        browser, posted, [{"id": 7, "name": "Pine Street Lumber"}]
+    )
+    asked = []
+
+    def _last(route):
+        asked.append(route.request.url)
+        route.fulfill(json={"transaction_id": 9, "category_account_id": 2,
+                            "class_id": None, "amount": "-42.10"})
+
+    page.route("**/api/banking/payee-last*", _last)
+    try:
+        page.focus("#qe-payee")
+        page.keyboard.type("pi")
+        page.keyboard.press("Tab")
+        page.wait_for_function("() => document.getElementById('qe-out').value === '42.10'")
+        assert page.input_value("#qe-category") == "2"
+        assert page.input_value("#qe-category-box") != ""
+        assert page.input_value("#qe-in") == ""
+        assert "Pine%20Street%20Lumber" in asked[-1] and "account_id=1" in asked[-1]
+
+        # a row with an amount typed is never overwritten
+        page.evaluate("() => BankingPage._resetQuickRow && BankingPage._resetQuickRow()")
+        page.fill("#qe-out", "")
+        page.select_option("#qe-category", "")
+        page.fill("#qe-out", "5")
+        page.fill("#qe-payee", "Pine Street Lumber")
+        page.evaluate("() => BankingPage.quickFill(1, 'Pine Street Lumber')")
+        page.wait_for_timeout(200)
+        assert page.input_value("#qe-out") == "5"
+        assert page.input_value("#qe-category") == ""
     finally:
         page.close()

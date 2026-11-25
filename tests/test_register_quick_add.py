@@ -90,7 +90,7 @@ def test_the_new_account_goes_into_every_picker_and_is_chosen():
 def test_the_payee_is_offered_by_the_money_side_and_checks_both_lists():
     # on blur the side comes from the amount boxes, on post from the entry
     assert (
-        "onblur=\"BankingPage.payeeTyped(this.value, BankingPage._rowMoneyIn(), 'qe-payee')\""
+        "BankingPage.payeeTyped(this.value, BankingPage._rowMoneyIn(), 'qe-payee')\""
         in BANKING_JS
     )
     assert (

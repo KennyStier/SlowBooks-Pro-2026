@@ -204,11 +204,12 @@ def test_on_the_quick_row_walks_and_only_the_last_amount_posts(browser):
         for _ in range(6):
             page.keyboard.press("Enter")
             walk.append(page.evaluate(ACTIVE))
+        # the row's fields in its columns' order, QuickBooks' 1-line register
         assert walk == [
-            "qe-payee",
-            "qe-memo",
             "qe-ref",
-            "qe-category",
+            "qe-payee",
+            "qe-category-box",
+            "qe-memo",
             "qe-out",
             "qe-in",
         ]

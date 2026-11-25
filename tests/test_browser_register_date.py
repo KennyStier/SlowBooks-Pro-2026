@@ -50,7 +50,7 @@ def _post_quick(page, date, amount="25"):
     page.fill("#qe-date", date)
     page.select_option("#qe-category", "2")
     page.fill("#qe-out", amount)
-    page.click("#reg-quick-entry button:has-text('Post')")
+    page.click("#reg-quick-entry button:has-text('Record')")
     page.wait_for_selector("#toast-container .toast:has-text('Entry posted')")
     # the register redraws after the post; wait for the fresh row
     page.wait_for_function("() => document.getElementById('qe-out').value === ''")
@@ -130,7 +130,7 @@ def test_the_far_date_question_is_asked_once_not_for_the_carried_date(browser):
         assert page.input_value("#qe-date") == "2020-01-16"
         page.select_option("#qe-category", "2")
         page.fill("#qe-out", "5")
-        page.click("#reg-quick-entry button:has-text('Post')")
+        page.click("#reg-quick-entry button:has-text('Record')")
         page.wait_for_function("() => document.getElementById('qe-out').value === ''")
         assert len(asked) == 2
         assert posted[-1]["date"] == "2020-01-16"
@@ -606,7 +606,7 @@ def test_a_void_keeps_the_dates_and_the_place_on_the_page(browser):
         page.locator('tr[data-txn="140"] button', has_text="Void").click()
         _toast_with(page, "Voided")
         page.wait_for_function(
-            "() => !document.querySelector('tr[data-txn=\"140\"] button[data-destructive]')"
+            "() => !document.querySelector('tr[data-txn=\"140\"] button[onclick*=\"voidEntry\"]')"
         )
         assert page.evaluate("() => location.hash") == at
         assert abs(page.evaluate(SCROLLED) - top) <= 1
@@ -1581,8 +1581,8 @@ def test_the_category_column_names_the_account_or_counts_a_split(browser):
         heads = page.eval_on_selector_all(
             "#page-content thead th", "ths => ths.map(t => t.textContent.trim())"
         )
-        assert heads[4:6] == ["Type", "Category"]
-        col = heads.index("Category")
+        assert heads[2:6] == ["Type", "Payee", "Account", "Memo"]
+        col = heads.index("Account")
         cell = (
             '(txn, col) => document.querySelector(`tr[data-txn="${txn}"]`).cells[col]'
         )
@@ -1617,10 +1617,10 @@ def test_the_category_column_names_the_account_or_counts_a_split(browser):
             "(col) => document.getElementById('qe-category').closest('td').cellIndex === col",
             col,
         )
-        # the Posting link of a register entry stays: the Memo cell is as it was
+        # the Posting link of a register entry stays, with the row's buttons
         assert (
             page.locator(
-                f'tr[data-txn="{one["transaction_id"]}"] td:nth-child(3) a'
+                f'tr[data-txn="{one["transaction_id"]}"] td.rg-actions a.rg-posting'
             ).count()
             == 1
         )
@@ -1646,4 +1646,5 @@ def test_the_empty_register_has_the_populated_ones_columns(browser):
     finally:
         page.close()
     assert empty == full
-    assert full[:6] == ["Date", "Payee", "Memo", "Ref #", "Type", "Category"]
+    # QuickBooks' 1-line register order
+    assert full[:6] == ["Date", "Num", "Type", "Payee", "Account", "Memo"]
